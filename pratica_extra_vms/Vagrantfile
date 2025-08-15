@@ -1,6 +1,6 @@
 Vagrant.configure("2") do |config| # abre o bloco de configuração do Vagrant
   # Configuração do Vagrant
-  config.vm.box = "ubuntu/focal64" # Define a box base para as VMs
+  config.vm.box = "ubuntu/jammy64"
 
   bridge_iface   = "Realtek PCIe GbE Family Controller" # Interface de rede bridged
   # Pode ser necessário ajustar o nome da interface de rede conforme o sistema operacional
@@ -13,8 +13,8 @@ Vagrant.configure("2") do |config| # abre o bloco de configuração do Vagrant
       hostname: "fast-lab-vm1", # Nome do host da VM
       ip: "192.168.0.120",
       vb_name: "lab-vm1", # Nome da VM no VirtualBox
-      memory: 1024,
-      cpu: 1
+      # memory: 3096,
+      # cpu: 3
     },
     {
       name: "vm2",
@@ -24,37 +24,26 @@ Vagrant.configure("2") do |config| # abre o bloco de configuração do Vagrant
     }
   ]
 
-  vms.each do |vm_conf| # Itera sobre cada configuração de VM
-    # Define a configuração de cada VM
+  vms.each do |vm_conf|
     config.vm.define vm_conf[:name] do |vm|
       vm.vm.hostname = vm_conf[:hostname]
+      vm.vm.network "public_network", bridge: bridge_iface, ip: vm_conf[:ip]
 
-      vm.vm.network "public_network",
-        bridge: bridge_iface,
-        ip: vm_conf[:ip] #
-
-      # Recursos da VM
       vm.vm.provider "virtualbox" do |vb|
         vb.name   = vm_conf[:vb_name]
         vb.memory = vm_conf.fetch(:memory, default_memory)
         vb.cpus   = vm_conf.fetch(:cpu,    default_cpu)
       end
 
-      vm.vm.synced_folder "../docker/app", "/home/vagrant/app",
-        owner: "vagrant", group: "vagrant"
+      vm.vm.synced_folder "../praticas", "/home/vagrant/app", owner: "vagrant", group: "vagrant"
 
-      # Provision por VM
       if vm_conf[:name] == "vm1"
-        vm.vm.provision "shell",
-          privileged: true,
-          path: "provision/nginx.sh",
-          run: "once"
-      elsif vm_conf[:name] == "vm2"
-        vm.vm.provision "docker" do |d|
-          # d.install = true
-          d.run "nginx:latest",
-                args: "-p 80:80"
+        vm.vm.provision "shell", privileged: true, path: "provision/nginx.sh", run: "once"
+      else
+        vm.vm.provision "docker", run: "always" do |d|
+          d.run "nginx", image: "nginx:latest", args: "-p 80:80", restart: "always"
         end
+        vm.vm.provision "shell", inline: "usermod -aG docker vagrant || true"
       end
     end
   end
