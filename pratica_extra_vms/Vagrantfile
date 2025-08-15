@@ -1,0 +1,61 @@
+Vagrant.configure("2") do |config| # abre o bloco de configuração do Vagrant
+  # Configuração do Vagrant
+  config.vm.box = "ubuntu/focal64" # Define a box base para as VMs
+
+  bridge_iface   = "Realtek PCIe GbE Family Controller" # Interface de rede bridged
+  # Pode ser necessário ajustar o nome da interface de rede conforme o sistema operacional
+  default_memory = 2048 # Memória padrão para as VMs
+  default_cpu    = 2 # Número padrão de CPUs para as VMs
+
+  vms = [
+    {
+      name: "vm1", # Nome da VM
+      hostname: "fast-lab-vm1", # Nome do host da VM
+      ip: "192.168.0.120",
+      vb_name: "lab-vm1", # Nome da VM no VirtualBox
+      memory: 1024,
+      cpu: 1
+    },
+    {
+      name: "vm2",
+      hostname: "fast-lab-vm2",
+      ip: "192.168.0.121",
+      vb_name: "lab-vm2",
+    }
+  ]
+
+  vms.each do |vm_conf| # Itera sobre cada configuração de VM
+    # Define a configuração de cada VM
+    config.vm.define vm_conf[:name] do |vm|
+      vm.vm.hostname = vm_conf[:hostname]
+
+      vm.vm.network "public_network",
+        bridge: bridge_iface,
+        ip: vm_conf[:ip] #
+
+      # Recursos da VM
+      vm.vm.provider "virtualbox" do |vb|
+        vb.name   = vm_conf[:vb_name]
+        vb.memory = vm_conf.fetch(:memory, default_memory)
+        vb.cpus   = vm_conf.fetch(:cpu,    default_cpu)
+      end
+
+      vm.vm.synced_folder "../docker/app", "/home/vagrant/app",
+        owner: "vagrant", group: "vagrant"
+
+      # Provision por VM
+      if vm_conf[:name] == "vm1"
+        vm.vm.provision "shell",
+          privileged: true,
+          path: "provision/nginx.sh",
+          run: "once"
+      elsif vm_conf[:name] == "vm2"
+        vm.vm.provision "docker" do |d|
+          # d.install = true
+          d.run "nginx:latest",
+                args: "-p 80:80"
+        end
+      end
+    end
+  end
+end
